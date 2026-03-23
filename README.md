@@ -7,49 +7,90 @@
 - HTTP 代理：`40001`
 - SOCKS5 代理：`40008`
 
----
+默认发布镜像：
 
-## 项目特点
-
-适合需要稳定接入 WARP Teams，并同时给不同应用提供 HTTP 和 SOCKS5 两种代理入口的场景。
-
-工作方式：
-
-1. 使用官方 `cloudflare-warp` 完成注册和连接
-2. 使用 `socat` 转发 HTTP 代理
-3. 使用 `gost` 将 HTTP 代理转换为 SOCKS5
+```bash
+docker pull magotcai/cfwarpteamsproxy:latest
+```
 
 ---
 
 ## 快速开始
 
-### 1. 修改 `docker-compose.yml`
+### 1. 准备 `docker-compose.yml`
 
-以下三个环境变量是必填项，不能留空，也不能保留占位值：
+当前仓库内的 [docker-compose.yml](d:\Project\CFWarpTeamsProxy\docker-compose.yml) 已经改成直接拉取镜像的方式：
 
 ```yaml
-environment:
-  TEAM_NAME: "REPLACE_WITH_TEAM_NAME"
-  PROXY_PORT: "REPLACE_WITH_PROXY_PORT"
-  CF_REGISTRATION_TOKEN: "REPLACE_WITH_TOKEN"
+version: "3.9"
+
+services:
+  warp:
+    image: magotcai/cfwarpteamsproxy:latest
+    container_name: warp-teams-proxy
+    restart: unless-stopped
+
+    cap_add:
+      - NET_ADMIN
+
+    ports:
+      - "127.0.0.1:40001:40001"
+      - "127.0.0.1:40008:40008"
+
+    environment:
+      TEAM_NAME: "REPLACE_WITH_TEAM_NAME"
+      PROXY_PORT: "REPLACE_WITH_PROXY_PORT"
+      CF_REGISTRATION_TOKEN: "REPLACE_WITH_TOKEN"
+
+    volumes:
+      - warp-data:/var/lib/cloudflare-warp
+
+volumes:
+  warp-data:
 ```
 
-示例：
+### 2. 填写必填环境变量
+
+以下三个变量必须填写，不能留空，也不能保留占位值：
 
 ```yaml
 environment:
-  TEAM_NAME: "example-team"
+  TEAM_NAME: "你的团队名"
   PROXY_PORT: "40000"
-  CF_REGISTRATION_TOKEN: "xxxxxxxxxxxxxxxx"
+  CF_REGISTRATION_TOKEN: "你的真实token"
 ```
 
-### 2. 启动
+说明：
+
+- `TEAM_NAME`：Cloudflare Teams 组织名
+- `PROXY_PORT`：容器内 WARP 本地 HTTP 代理端口，必须是 `1-65535` 的数字
+- `CF_REGISTRATION_TOKEN`：Cloudflare WARP Teams 注册 token
+
+### 3. 启动
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-### 3. 使用代理
+### 4. 测试代理
+
+HTTP：
+
+```bash
+curl -x http://127.0.0.1:40001 ifconfig.me
+```
+
+SOCKS5：
+
+```bash
+curl --socks5-hostname 127.0.0.1:40008 https://ifconfig.me
+```
+
+---
+
+## 代理地址
+
+默认可直接使用：
 
 ```text
 HTTP   : http://127.0.0.1:40001
@@ -58,53 +99,7 @@ SOCKS5 : socks5://127.0.0.1:40008
 
 ---
 
-## 必填环境变量
-
-### `TEAM_NAME`
-
-必填。Cloudflare Teams 组织名。
-
-### `PROXY_PORT`
-
-必填。WARP 在容器内监听的本地 HTTP 代理端口。
-
-要求：
-
-- 必须填写
-- 必须是数字
-- 必须在 `1-65535` 之间
-
-### `CF_REGISTRATION_TOKEN`
-
-必填。Cloudflare WARP Teams 注册 token。
-
----
-
-## 启动校验
-
-容器启动时会强制校验以下条件：
-
-- `TEAM_NAME` 不能为空
-- `PROXY_PORT` 不能为空
-- `CF_REGISTRATION_TOKEN` 不能为空
-- 不能继续使用 `team-name`、`your-token`、`REPLACE_WITH_*`、`CHANGEME` 这类占位值
-- `PROXY_PORT` 必须是有效端口号
-
-如果未通过校验，容器会直接报错退出。
-
----
-
-## 默认端口
-
-| 端口 | 类型 | 说明 |
-| :--- | :--- | :--- |
-| `40001` | HTTP | 对外提供 HTTP 代理 |
-| `40008` | SOCKS5 | 对外提供 SOCKS5 代理 |
-| `PROXY_PORT` | 内部端口 | WARP 本地 HTTP 代理端口 |
-
----
-
-## 注意事项
+## 运行要求
 
 ### 1. 需要 `NET_ADMIN`
 
@@ -115,12 +110,10 @@ cap_add:
 
 ### 2. 当前支持 `amd64` 和 `arm64`
 
-`Dockerfile` 会根据构建架构自动下载对应的 `gost` 二进制：
+镜像会根据构建架构自动下载对应的 `gost` 二进制：
 
 - `amd64`
 - `arm64`
-
-如果你要运行在其他架构，构建会直接失败。
 
 ### 3. 注册数据会持久化
 
@@ -131,6 +124,32 @@ cap_add:
 ```
 
 删除数据卷后，通常需要重新注册。
+
+---
+
+## 本地构建
+
+如果你想自己在本地构建镜像：
+
+```bash
+docker build -t magotcai/cfwarpteamsproxy:latest .
+```
+
+构建完成后可直接运行：
+
+```bash
+docker run -d \
+  --name warp-teams-proxy \
+  --restart unless-stopped \
+  --cap-add NET_ADMIN \
+  -e TEAM_NAME=你的团队名 \
+  -e PROXY_PORT=40000 \
+  -e CF_REGISTRATION_TOKEN=你的真实token \
+  -p 127.0.0.1:40001:40001 \
+  -p 127.0.0.1:40008:40008 \
+  -v warp-data:/var/lib/cloudflare-warp \
+  magotcai/cfwarpteamsproxy:latest
+```
 
 ---
 

@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   warp:
-    build: .
+    image: magotcai/cfwarpteamsproxy:latest
     container_name: warp-teams-proxy
     restart: unless-stopped
 
