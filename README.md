@@ -113,15 +113,14 @@ cap_add:
   - NET_ADMIN
 ```
 
-### 2. 当前 `gost` 下载的是 `amd64`
+### 2. 当前支持 `amd64` 和 `arm64`
 
-`Dockerfile` 当前使用的是：
+`Dockerfile` 会根据构建架构自动下载对应的 `gost` 二进制：
 
-```text
-gost-linux-amd64
-```
+- `amd64`
+- `arm64`
 
-如果你要运行在 `arm64`，需要自行调整。
+如果你要运行在其他架构，构建会直接失败。
 
 ### 3. 注册数据会持久化
 

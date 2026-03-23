@@ -41,6 +41,34 @@ require_port() {
     fi
 }
 
+require_cmd() {
+    local name="$1"
+
+    if ! command -v "$name" >/dev/null 2>&1; then
+        echo "[ERROR] Required command '$name' not found in container."
+        exit 1
+    fi
+}
+
+wait_for_listen() {
+    local port="$1"
+    local name="$2"
+    local retries="${3:-20}"
+    local i
+
+    for i in $(seq 1 "$retries"); do
+        if ss -lntp 2>/dev/null | grep -q ":${port} "; then
+            echo "[INFO] ${name} is listening on :${port}"
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "[ERROR] ${name} failed to listen on :${port}"
+    ss -lntp || true
+    return 1
+}
+
 require_env "TEAM_NAME" "$TEAM_NAME"
 require_env "PROXY_PORT" "$PROXY_PORT"
 require_env "CF_REGISTRATION_TOKEN" "$TOKEN"
@@ -50,6 +78,10 @@ require_real_value "PROXY_PORT" "$PROXY_PORT"
 require_real_value "CF_REGISTRATION_TOKEN" "$TOKEN"
 
 require_port "$PROXY_PORT"
+require_cmd "warp-svc"
+require_cmd "warp-cli"
+require_cmd "socat"
+require_cmd "gost"
 
 echo "[INFO] Starting warp-svc..."
 warp-svc >/dev/null 2>&1 &
@@ -76,13 +108,18 @@ $WARP proxy port "$PROXY_PORT" || true
 echo "[INFO] Connecting..."
 $WARP connect || true
 
+echo "[INFO] gost version:"
+gost -V || true
+
 # HTTP forwarder
 echo "[INFO] Starting HTTP forwarder 40001 -> 127.0.0.1:${PROXY_PORT}"
-socat TCP-LISTEN:40001,fork,bind=0.0.0.0 TCP:127.0.0.1:${PROXY_PORT} &
+socat -d -d TCP-LISTEN:40001,fork,bind=0.0.0.0 TCP:127.0.0.1:${PROXY_PORT} &
+wait_for_listen "40001" "HTTP forwarder"
 
 # SOCKS5 bridge
 echo "[INFO] Starting SOCKS5 on :40008 -> HTTP proxy"
 gost -L socks5://0.0.0.0:40008 -F http://127.0.0.1:${PROXY_PORT} &
+wait_for_listen "40008" "SOCKS5 bridge"
 
 echo "[INFO] Status:"
 $WARP status || true
