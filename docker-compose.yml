@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  warp:
+    build: .
+    container_name: warp-teams-proxy
+    restart: unless-stopped
+
+    cap_add:
+      - NET_ADMIN
+
+    ports:
+      - "127.0.0.1:40001:40001"   # HTTP
+      - "127.0.0.1:40008:40008"   # SOCKS5
+
+    environment:
+      TEAM_NAME: "REPLACE_WITH_TEAM_NAME"
+      PROXY_PORT: "REPLACE_WITH_PROXY_PORT"
+      CF_REGISTRATION_TOKEN: "REPLACE_WITH_TOKEN"
+
+    volumes:
+      - warp-data:/var/lib/cloudflare-warp
+
+volumes:
+  warp-data:
